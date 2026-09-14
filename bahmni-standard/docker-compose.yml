@@ -17,8 +17,8 @@ x-log-config:
 services:
   proxy:
     image: "bahmni/proxy:${PROXY_IMAGE_TAG:?}"
-    #volumes:
-    # - ${CERTIFICATE_PATH}:/etc/tls
+    volumes:
+    - ${CERTIFICATE_PATH}:/etc/tls
     ports:
       - "80:80"
       - "443:443"
@@ -270,6 +270,8 @@ services:
     restart: always
     profiles: ["emr", "bahmni-standard", "metabase", "bahmni-mart"]
     command: "--sql-mode=${OPENMRS_DB_SQL_MODES:?}"
+    ports:
+      - "127.0.0.1:3306:3306"
     environment:
       TZ: ${TZ}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?}
@@ -374,8 +376,8 @@ services:
   implementer-interface:
     image: bahmni/implementer-interface:${IMPLEMENTER_INTERFACE_IMAGE_TAG:?}
     profiles: ["implementer-interface", "emr", "bahmni-standard"]
-    #volumes:
-    #  - "${IMPLEMENTER_INTERFACE_CODE_PATH:?}/dist:/usr/local/apache2/htdocs/implementer-interface"
+    volumes:
+      - "${IMPLEMENTER_INTERFACE_CODE_PATH:?}/dist:/usr/local/apache2/htdocs/implementer-interface"
     depends_on:
       - openmrs
     logging: *log-config
@@ -447,8 +449,8 @@ services:
     image: bahmni/appointments:${APPOINTMENTS_IMAGE_TAG:?}
     profiles: ["emr", "bahmni-standard"]
     restart: ${RESTART_POLICY}
-    # volumes:
-    # - "${APPOINTMENTS_PATH:?}/dist/:/usr/local/apache2/htdocs/appointments"
+    volumes:
+    - "${APPOINTMENTS_PATH:?}/dist/:/usr/local/apache2/htdocs/appointments"
 
   dcm4chee:
     image: bahmni/dcm4chee:${DCM4CHEE_IMAGE_TAG:?}
