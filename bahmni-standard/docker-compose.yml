@@ -19,7 +19,7 @@ services:
     image: "bahmni/proxy:${PROXY_IMAGE_TAG:?}"
     volumes:
     - ${CERTIFICATE_PATH}:/etc/tls
-    - bahmni-proxy:/usr/local/apache2/htdocs
+    - ${PROXY_HTDOCS_PATH:?}:/usr/local/apache2/htdocs
     ports:
       - "80:80"
       - "443:443"
@@ -32,6 +32,7 @@ services:
     image: "bahmni/standard-config:${CONFIG_IMAGE_TAG:?}"
     volumes:
       - "${CONFIG_VOLUME:?}:/usr/local/bahmni_config"
+      - "${CONFIG_OPENMRS_APPS_PATH:?}:/usr/local/bahmni_config/openmrs/apps"
     logging: *log-config
     restart: ${RESTART_POLICY}
 
