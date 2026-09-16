@@ -19,6 +19,7 @@ services:
     image: "bahmni/proxy:${PROXY_IMAGE_TAG:?}"
     volumes:
     - ${CERTIFICATE_PATH}:/etc/tls
+    - bahmni-proxy:/usr/local/apache2/htdocs
     ports:
       - "80:80"
       - "443:443"
@@ -640,3 +641,4 @@ volumes:
   reportsdbdata:
   pacsdbdata:
   dcm4chee-config:
+  bahmni-proxy:
