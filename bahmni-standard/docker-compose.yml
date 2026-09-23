@@ -20,6 +20,7 @@ services:
     volumes:
     - ${CERTIFICATE_PATH}:/etc/tls
     - ${PROXY_HTDOCS_PATH:?}:/usr/local/apache2/htdocs
+    - ${APACHE_CONF_PATH:?}:/usr/local/apache2/conf
     ports:
       - "80:80"
       - "443:443"
