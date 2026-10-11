@@ -33,7 +33,6 @@ services:
     image: "bahmni/standard-config:${CONFIG_IMAGE_TAG:?}"
     volumes:
       - "${CONFIG_VOLUME:?}:/usr/local/bahmni_config"
-      - "${CONFIG_OPENMRS_APPS_PATH:?}:/usr/local/bahmni_config/openmrs/apps"
     logging: *log-config
     restart: ${RESTART_POLICY}
 
@@ -634,7 +633,6 @@ volumes:
   bahmni-document-images:
   bahmni-clinical-forms:
   dcm4chee-archive:
-  bahmni-config:
   bahmni-lab-results:
   bahmni-uploaded-files:
   configuration_checksums:
