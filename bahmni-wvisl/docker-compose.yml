@@ -1,0 +1,351 @@
+version: "3.7"
+
+x-default-logging: &default {}
+
+x-loki-logging: &loki
+  driver: loki
+  options:
+    loki-url: ${LOKI_URL:?}
+    mode: non-blocking
+    max-buffer-size: 4m
+    loki-retries: "3"
+
+x-log-config:
+  &log-config # update this value to *loki if needed to see logs in grafana dashboard.
+  <<: *default
+
+services:
+  proxy:
+    image: "andyife/proxy:vps-v1"
+    volumes:
+    - tls-cert:/etc/tls
+    ports:
+      - "80:80"
+      - "443:443"
+    logging: *log-config
+    restart: ${RESTART_POLICY}
+    environment:
+      TZ: ${TZ:?}
+
+  bahmni-config:
+    image: "andyife/bahmni-config:vps-v1"
+    volumes:
+      - "bahmni-config:/usr/local/bahmni_config"
+    logging: *log-config
+    restart: ${RESTART_POLICY}
+
+  openelis:
+    image: "bahmni/openelis:${OPENELIS_IMAGE_TAG:?[ERROR]}"
+    volumes:
+      - "bahmni-config:/etc/bahmni_config/:ro"
+      - "bahmni-lab-results:/home/bahmni/uploaded_results"
+      - "bahmni-uploaded-files:/home/bahmni/uploaded-files"
+    environment:
+      TZ: ${TZ}
+      OPENMRS_HOST: ${OPENMRS_HOST}
+      OPENMRS_PORT: ${OPENMRS_PORT:?}
+      OPENMRS_ATOMFEED_USER: ${OPENMRS_ATOMFEED_USER:?}
+      OPENMRS_ATOMFEED_PASSWORD: ${OPENMRS_ATOMFEED_PASSWORD:?}
+      OPENELIS_DB_SERVER: ${OPENELIS_DB_SERVER}
+      OPENELIS_DB_NAME: ${OPENELIS_DB_NAME:?}
+      OPENELIS_DB_USERNAME: ${OPENELIS_DB_USER:?}
+      OPENELIS_DB_PASSWORD: ${OPENELIS_DB_PASSWORD:?}
+    depends_on:
+      openelisdb:
+        condition: service_healthy
+      bahmni-config:
+        condition: service_started
+    logging: *log-config
+    restart: ${RESTART_POLICY}
+
+  openelisdb:
+    image: "${OPENELIS_DB_IMAGE_NAME:?[ERROR]}"
+    volumes:
+      - "./openelis-db-dump:/resources/db-dump"
+      - "openelis-db-data:/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U clinlims"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      TZ: ${TZ}
+      POSTGRES_USER: ${OPENELIS_DB_USER:?}
+      POSTGRES_PASSWORD: ${OPENELIS_DB_PASSWORD:?}
+      POSTGRES_DB: ${OPENELIS_DB_NAME:?}
+    logging: *log-config
+    restart: ${RESTART_POLICY}
+
+  openmrs:
+    image: bahmni/openmrs:${OPENMRS_IMAGE_TAG:?}
+    environment:
+      TZ: ${TZ}
+      OMRS_DB_NAME: ${OPENMRS_DB_NAME:?}
+      OMRS_DB_HOSTNAME: ${OPENMRS_DB_HOST:?}
+      OMRS_DB_USERNAME: ${OPENMRS_DB_USERNAME:?}
+      OMRS_DB_PASSWORD: ${OPENMRS_DB_PASSWORD:?}
+      OMRS_CREATE_TABLES: ${OPENMRS_DB_CREATE_TABLES}
+      OMRS_AUTO_UPDATE_DATABASE: ${OPENMRS_DB_AUTO_UPDATE}
+      OMRS_MODULE_WEB_ADMIN: ${OPENMRS_MODULE_WEB_ADMIN}
+      # OMRS_DEV_DEBUG_PORT: ${OMRS_DEV_DEBUG_PORT}
+      OMRS_JAVA_SERVER_OPTS: ${OMRS_JAVA_SERVER_OPTS}
+      OMRS_JAVA_MEMORY_OPTS: ${OMRS_JAVA_MEMORY_OPTS}
+      OPENELIS_HOST: ${OPENELIS_HOST:?}
+      OPENELIS_PORT: ${OPENELIS_PORT:?}
+      OPENELIS_ATOMFEED_USER: ${OPENELIS_ATOMFEED_USER:?}
+      OPENELIS_ATOMFEED_PASSWORD: ${OPENELIS_ATOMFEED_PASSWORD:?}
+      SEND_MAIL: ${SEND_MAIL}
+      MAIL_TRANSPORT_PROTOCOL: ${MAIL_TRANSPORT_PROTOCOL}
+      MAIL_SMTP_HOST: ${MAIL_SMTP_HOST}
+      MAIL_SMTP_PORT: ${MAIL_SMTP_PORT}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH}
+      MAIL_SMTP_STARTTLS_ENABLE: ${MAIL_SMTP_STARTTLS_ENABLE}
+      MAIL_SMTP_SSL_ENABLE: ${MAIL_SMTP_SSL_ENABLE}
+      MAIL_DEBUG: ${MAIL_DEBUG}
+      MAIL_FROM: ${MAIL_FROM}
+      MAIL_USER: ${MAIL_USER}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      OMRS_DOCKER_ENV: ${OPENMRS_DOCKER_ENV}
+      OMRS_C3P0_MAX_SIZE: ${OMRS_C3P0_MAX_SIZE}
+      WEIGHT_CONCEPT_UUID: ${WEIGHT_CONCEPT_UUID}
+      HEIGHT_CONCEPT_UUID: ${HEIGHT_CONCEPT_UUID}
+      OMRS_DB_EXTRA_ARGS: ${OMRS_DB_EXTRA_ARGS}
+      LUCENE_MATCH_TYPE: ${LUCENE_MATCH_TYPE}
+      DOCUMENT_MAX_SIZE_MB: ${DOCUMENT_MAX_SIZE_MB}
+    #ports:
+    # - ${OMRS_DEV_DEBUG_PORT}:${OMRS_DEV_DEBUG_PORT}
+    volumes:
+      - "bahmni-config:/etc/bahmni_config/:ro"
+      - "bahmni-lab-results:/home/bahmni/uploaded_results"
+      - "bahmni-uploaded-files:/home/bahmni/uploaded-files"
+      - "bahmni-openmrs-modules:/openmrs/data/modules/"
+      - "bahmni-patient-images:/home/bahmni/patient_images"
+      - "bahmni-document-images:/home/bahmni/document_images"
+      - "bahmni-clinical-forms:/home/bahmni/clinical_forms"
+      - "configuration-checksums:/openmrs/data/configuration_checksums"
+      - "sms-token:/openmrs/data/sms-token"
+    depends_on:
+      - openmrsdb
+      - bahmni-config
+    logging: *log-config
+    restart: ${RESTART_POLICY}
+
+  openmrsdb:
+    image: ${OPENMRS_DB_IMAGE_NAME:?}
+    restart: always
+    command: "--sql-mode=${OPENMRS_DB_SQL_MODES:?}"
+    ports:
+      - "127.0.0.1:3306:3306"
+    environment:
+      TZ: ${TZ}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?}
+      MYSQL_DATABASE: ${OPENMRS_DB_NAME:?}
+      MYSQL_USER: ${OPENMRS_DB_USERNAME:?}
+      MYSQL_PASSWORD: ${OPENMRS_DB_PASSWORD:?}
+    volumes:
+      - "openmrs-db-data:/var/lib/mysql"
+      - "configuration-checksums:/configuration_checksums"
+    logging: *log-config
+
+  metabasedb:
+    image: postgres:${METABASE_POSTGRES_IMAGE_TAG:?}
+    restart: on-failure:[3]
+    environment:
+      TZ: ${TZ}
+      POSTGRES_DB: ${METABASE_DB_NAME:?}
+      POSTGRES_USER: ${METABASE_DB_USER:?}
+      POSTGRES_PASSWORD: ${METABASE_DB_PASSWORD:?}
+    volumes:
+      - "metabase-data:/var/lib/postgresql/data"
+
+  metabase:
+    image: bahmni/bahmni-metabase:${METABASE_IMAGE_TAG:?}
+    restart: on-failure:[3]
+    environment:
+      TZ: ${TZ}
+      MB_ADMIN_EMAIL: ${METABASE_ADMIN_EMAIL:?}
+      MB_ADMIN_FIRST_NAME: ${METABASE_ADMIN_FIRST_NAME:?}
+      MB_ADMIN_PASSWORD: ${METABASE_ADMIN_PASSWORD:?}
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: ${METABASE_DB_NAME:?}
+      MB_DB_PORT: ${METABASE_DB_PORT:?}
+      MB_DB_USER: ${METABASE_DB_USER:?}
+      MB_DB_PASS: ${METABASE_DB_PASSWORD:?}
+      MB_DB_HOST: ${METABASE_DB_HOST:?}
+      OPENMRS_DB_HOST: ${OPENMRS_DB_HOST:?}
+      OPENMRS_DB_NAME: ${OPENMRS_DB_NAME:?}
+      OPENMRS_DB_USERNAME: ${OPENMRS_DB_USERNAME:?}
+      OPENMRS_DB_PASSWORD: ${OPENMRS_DB_PASSWORD:?}
+      MART_DB_HOST: ${MART_DB_HOST:?}
+      MART_DB_NAME: ${MART_DB_NAME:?}
+      MART_DB_USERNAME: ${MART_DB_USERNAME:?}
+      MART_DB_PASSWORD: ${MART_DB_PASSWORD:?}
+    depends_on:
+      - metabasedb
+
+  martdb:
+    image: postgres:${BAHMNI_MART_DB_IMAGE_TAG:?}
+    restart: ${RESTART_POLICY}
+    environment:
+      TZ: ${TZ}
+      POSTGRES_DB: ${MART_DB_NAME:?}
+      POSTGRES_USER: ${MART_DB_USERNAME:?}
+      POSTGRES_PASSWORD: ${MART_DB_PASSWORD:?}
+    volumes:
+      - "mart-data:/var/lib/postgresql/data"
+
+  mart:
+    image: bahmni/bahmni-mart:${BAHMNI_MART_IMAGE_TAG:?}
+    restart: ${RESTART_POLICY}
+    environment:
+      TZ: ${TZ}
+      CRON_TIME: ${MART_CRON_TIME:?}
+      MART_DB_HOST: ${MART_DB_HOST:?}
+      MART_DB_NAME: ${MART_DB_NAME:?}
+      MART_DB_USERNAME: ${MART_DB_USERNAME:?}
+      MART_DB_PASSWORD: ${MART_DB_PASSWORD:?}
+      OPENMRS_DB_HOST: ${OPENMRS_DB_HOST:?}
+      OPENMRS_DB_NAME: ${OPENMRS_DB_NAME:?}
+      OPENMRS_DB_USERNAME: ${OPENMRS_DB_USERNAME:?}
+      OPENMRS_DB_PASSWORD: ${OPENMRS_DB_PASSWORD:?}
+    depends_on:
+      - martdb
+      - openmrsdb
+      - openmrs
+    volumes:
+      - "bahmni-clinical-forms:/home/bahmni/clinical_forms"
+
+  bahmni-web:
+    image: andyife/bahmni-web:vps-v1
+    volumes:
+      - "bahmni-config:/usr/local/apache2/htdocs/bahmni_config/:ro"
+    depends_on:
+      - bahmni-config
+    logging: *log-config
+    restart: ${RESTART_POLICY}
+
+  bahmni-apps-frontend:
+    image: bahmni/bahmni-apps-frontend:${BAHMNI_APPS_FRONTEND_IMAGE_TAG:?}
+    # volumes:
+    #  - "${BAHMNI_APPS_FRONTEND_PATH:?}/distro/dist/:/usr/local/apache2/htdocs/bahmni-new"
+    logging: *log-config
+    restart: ${RESTART_POLICY}
+
+  implementer-interface:
+    image: andyife/implementer-interface:vps-v1
+    depends_on:
+      - openmrs
+      - bahmni-config
+    logging: *log-config
+    restart: ${RESTART_POLICY}
+
+  reports:
+    image: bahmni/reports:${REPORTS_IMAGE_TAG:?}
+    environment:
+      TZ: ${TZ}
+      OPENMRS_DB_HOST: ${OPENMRS_DB_HOST:?}
+      OPENMRS_DB_NAME: ${OPENMRS_DB_NAME:?}
+      OPENMRS_DB_USERNAME: ${OPENMRS_DB_USERNAME:?}
+      OPENMRS_DB_PASSWORD: ${OPENMRS_DB_PASSWORD:?}
+      OPENMRS_HOST: ${OPENMRS_HOST:?}
+      OPENMRS_PORT: ${OPENMRS_PORT:?}
+      OPENELIS_DB_SERVER: ${OPENELIS_DB_SERVER}
+      REPORTS_DB_SERVER: reportsdb
+      REPORTS_DB_NAME: ${REPORTS_DB_NAME:?}
+      REPORTS_DB_USERNAME: ${REPORTS_DB_USERNAME:?}
+      REPORTS_DB_PASSWORD: ${REPORTS_DB_PASSWORD:?}
+      # ODOO_DB_SERVER: ${ODOO_DB_HOST:?}
+      # ODOO_DB_NAME: ${ODOO_DB_NAME:?}
+      # ODOO_DB_USERNAME: ${ODOO_DB_USER:?}
+      # ODOO_DB_PASSWORD: ${ODOO_DB_PASSWORD:?}
+      ICD10_LITE_INDICATOR: ${ICD10_LITE_INDICATOR}
+    volumes:
+      - "bahmni-config:/etc/bahmni_config/:ro"
+      - "bahmni-queued-reports:/home/bahmni/reports"
+    # - "../snomed-resources/icd10-extensions-1.0.0-SNAPSHOT.jar:/var/run/bahmni-reports/bahmni-reports/WEB-INF/lib/icd10-extensions-1.0.0-SNAPSHOT.jar:ro"
+    depends_on:
+      - reportsdb
+      - openmrsdb
+      - bahmni-web
+      - bahmni-config
+    logging: *log-config
+    restart: ${RESTART_POLICY}
+
+  reportsdb:
+    platform: linux/amd64
+    image: ${REPORTS_DB_IMAGE_NAME:?}
+    environment:
+      TZ: ${TZ}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?}
+      MYSQL_DATABASE: ${REPORTS_DB_NAME:?}
+      MYSQL_USER: ${REPORTS_DB_USERNAME:?}
+      MYSQL_PASSWORD: ${REPORTS_DB_PASSWORD:?}
+    volumes:
+      - "reports-db-data:/var/lib/mysql"
+    logging: *log-config
+    restart: ${RESTART_POLICY}
+
+  patient-documents:
+    image: "bahmni/patient-documents:${PATIENT_DOCUMENTS_TAG:?}"
+    volumes:
+      - "bahmni-document-images:/usr/share/nginx/html/document_images"
+      - "bahmni-lab-results:/usr/share/nginx/html/uploaded_results"
+      - "bahmni-uploaded-files:/usr/share/nginx/html/uploaded-files"
+    environment:
+      TZ: ${TZ}
+      OPENMRS_HOST: ${OPENMRS_HOST:?}
+    depends_on:
+      - openmrs
+    logging: *log-config
+    restart: ${RESTART_POLICY}
+
+  appointments:
+    image: andyife/appointments:vps-v1
+    restart: ${RESTART_POLICY}
+
+  atomfeed-console:
+    image: bahmni/atomfeed-console:${ATOMFEED_CONSOLE_IMAGE_TAG:?}
+    restart: ${RESTART_POLICY}
+    environment:
+      TZ: ${TZ}
+      OPENMRS_DB_HOST: ${OPENMRS_DB_HOST}
+      OPENMRS_DB_NAME: ${OPENMRS_DB_NAME}
+      OPENMRS_DB_USERNAME: ${OPENMRS_DB_USERNAME}
+      OPENMRS_DB_PASSWORD: ${OPENMRS_DB_PASSWORD}
+      # ODOO_DB_HOST: ${ODOO_DB_HOST}
+      # ODOO_DB_NAME: ${ODOO_DB_NAME}
+      # ODOO_DB_USER: ${ODOO_DB_USER}
+      # ODOO_DB_PASSWORD: ${ODOO_DB_PASSWORD}
+      OPENELIS_DB_HOST: ${OPENELIS_DB_HOST}
+      OPENELIS_DB_USER: ${OPENELIS_DB_USER}
+      OPENELIS_DB_PASSWORD: ${OPENELIS_DB_PASSWORD}
+      # PACS_INTEGRATION_DB_HOST: ${PACS_DB_HOST}
+      # PACS_INTEGRATION_DB_NAME: ${PACS_INTEGRATION_DB_NAME}
+      # PACS_INTEGRATION_DB_USERNAME: ${PACS_INTEGRATION_DB_USERNAME}
+      # PACS_INTEGRATION_DB_PASSWORD: ${PACS_INTEGRATION_DB_PASSWORD}
+
+  ipd:
+    image: bahmni/microfrontend-ipd:${IPD_TAG:?}
+    container_name: ipd
+    restart: ${RESTART_POLICY}
+    # volumes:
+    #   - "${IPD_PATH:?}/dist/federation/:/usr/local/apache2/htdocs/ipd"
+    logging: *log-config
+
+volumes:
+  tls-cert:
+  bahmni-config:
+  bahmni-lab-results:
+  bahmni-uploaded-files:
+  openelis-db-data:
+  bahmni-openmrs-modules:
+  bahmni-patient-images:
+  bahmni-document-images:
+  bahmni-clinical-forms:
+  configuration-checksums:
+  sms-token:
+  openmrs-db-data:
+  metabase-data:
+  mart-data:
+  bahmni-queued-reports:
+  reports-db-data:
