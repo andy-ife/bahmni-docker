@@ -37,7 +37,7 @@ services:
     restart: ${RESTART_POLICY}
 
   openelis:
-    image: "bahmni/openelis:${OPENELIS_IMAGE_TAG:?[ERROR]}"
+    image: "andyife/openelis:vps-v1"
     volumes:
       - "bahmni-config:/etc/bahmni_config/:ro"
       - "bahmni-lab-results:/home/bahmni/uploaded_results"
@@ -218,7 +218,7 @@ services:
       - "bahmni-clinical-forms:/home/bahmni/clinical_forms"
 
   bahmni-web:
-    image: andyife/bahmni-web:vps-v1
+    image: andyife/bahmni-web:vps-v2
     volumes:
       - "bahmni-config:/usr/local/apache2/htdocs/bahmni_config/:ro"
     depends_on:
