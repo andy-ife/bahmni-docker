@@ -3,3 +3,5 @@
 **/backup-artifacts/*
 **/restore-artifacts/*
 .DS_Store
+
+/bahmni-wvisl/backups
